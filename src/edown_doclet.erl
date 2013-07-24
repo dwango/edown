@@ -139,7 +139,7 @@ gen(Sources, App, Packages, Modules, FileMap, Ctxt) ->
 	 ++ lists:concat([modules_frame(Modules1) || Modules1 =/= []]),
 
     Text = xmerl:export_simple_content(Data, edown_xmerl),
-    edoc_lib:write_file(Text, Dir, right_suffix(?INDEX_FILE, Options)),
+    write_file(Text, Dir, right_suffix(?INDEX_FILE, Options)),
     edoc_lib:write_info_file(App, Packages, Modules1, Dir),
     copy_stylesheet(Dir, Options),
     copy_image(Dir, Options),
@@ -196,7 +196,7 @@ make_top_level_README(Data, Dir, F, BaseHRef, Branch) ->
 		     Other
 	     end, Exp1) || Exp1 <- Exp],
     Text = xmerl:export_simple_content(New, edown_xmerl),
-    edoc_lib:write_file(Text, Dir, F).
+    write_file(Text, Dir, F).
 
 redirect_href(Attrs, Branch, BaseHRef) ->
     AppBlob = BaseHRef ++ "/blob/" ++ Branch ++ "/",
@@ -294,7 +294,7 @@ source({M, P, Name, Path}, Dir, Suffix, Env, Set, Private, Hidden,
 		true ->
 		    Text = edoc:layout(Doc, Options),
 		    Name1 = packages_last(M) ++ Suffix,
-		    edoc_lib:write_file(Text, Dir, Name1, P),
+		    write_file(Text, Dir, Name1, P),
 		    {sets:add_element(Module, Set), Error};
 		false ->
 		    {Set, Error}
@@ -368,7 +368,7 @@ package(P, Dir, FileMap, Env, Opts) ->
 		M:package(Data, Opts)
 	end,
     Text = edoc_lib:run_layout(F, Opts),
-    edoc_lib:write_file(Text, Dir, ?PACKAGE_SUMMARY, P).
+    write_file(Text, Dir, ?PACKAGE_SUMMARY, P).
 
 
 
@@ -429,7 +429,7 @@ overview(Dir, Title, Env, Opts) ->
 		M:overview(Data, Opts)
 	end,
     _Markdown = edoc_lib:run_layout(F, Opts).
-    %% edoc_lib:write_file(Text, Dir, ?OVERVIEW_SUMMARY).
+    %% write_file(Text, Dir, ?OVERVIEW_SUMMARY).
 
 
 copy_image(Dir, Options) ->
@@ -552,3 +552,22 @@ toc(_Paths, _Ctxt) ->
     %% Dir = Ctxt#context.dir,
     %% Env = Ctxt#context.env,
     %% app_index_file(Paths, Dir, Env, Opts).
+
+%% @doc edoc_lib:write_file/5 を非ユニコード文字を含むマルチバイト文字列にも対応させたもの
+write_file(Text, Dir, Name)          -> write_file(Text, Dir, Name, '').
+write_file(Text, Dir, Name, Package) -> write_file(Text, Dir, Name, Package, [{encoding,latin1}]).
+write_file(Text, Dir, Name, Package, Options) ->
+    File = filename:join([Dir, to_list(Package), Name]),
+    ok = filelib:ensure_dir(File),
+    case file:open(File, [write] ++ Options) of
+        {ok, FD} ->
+            file:write(FD, Text),
+            ok = file:close(FD);
+        {error, R} ->
+            R1 = file:format_error(R),
+            report("could not write file '~ts': ~ts.", [File, R1]),
+            exit(error)
+    end.
+
+to_list(A) when is_atom(A) -> atom_to_list(A);
+to_list(S) when is_list(S) -> S.
