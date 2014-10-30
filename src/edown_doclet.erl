@@ -211,7 +211,7 @@ redirect_href(Attrs, Branch, BaseHRef, Target) ->
 	#xmlAttribute{value = "/" ++ _} ->
 	    false;
 	#xmlAttribute{value = Href} = A ->
-	    case re:run(Href, ":", []) of
+	    case re:run(Href, ":", [unicode]) of
 		{match, _} ->
 		    false;
 		nomatch ->
@@ -319,11 +319,11 @@ source({M, P, Name, Path}, Dir, Suffix, Env, Set, Private, Hidden,
 
 guess_encoding(File) ->
     try epp:read_encoding(File) of
-        none -> latin1;
+        none -> epp:default_encoding();
         Enc  -> Enc
     catch
         _:_ ->
-            latin1
+            epp:default_encoding()
     end.
 
 write_file(Text, Dir, F) ->

@@ -694,7 +694,12 @@ see(E, Es) ->
     case href(E) of
 	[] -> Es;
 	Ref ->
-	    [{a, Ref, Es}]
+            case lists:keytake(href, 1, Ref) of
+                false                   -> [{a, Ref, Es}];
+                {value, {_, URI}, Ref2} ->
+                    Ref3 = [{href, make_relative_uri(URI)} | Ref2],
+                    [{a, Ref3, Es}]
+            end
     end.
 
 href(E) ->
@@ -705,7 +710,7 @@ href(E) ->
 		    "" -> [];
 		    S -> [{target, S}]
 		end,
-	    [{href, URI} | T]
+	    [{href, make_relative_uri(URI)} | T]
     end.
 
 equiv_p(Es) ->
@@ -1300,3 +1305,22 @@ end_of_sentence_1(C, Cs, true, As) ->
     {value, lists:reverse([C | As]), Cs};
 end_of_sentence_1(_, _, false, _) ->
     none.
+
+-spec make_relative_uri(string()) -> string().
+make_relative_uri("/" ++ _ = Path) ->
+    case file:get_cwd() of
+        {error, _}       -> Path;
+        {ok, CurrentDir} ->
+            CurrentDocDir = filename:join(CurrentDir, "doc/"),
+            CurrentDocDirComponents0 = filename:split(CurrentDocDir),
+            PathComponents0 = filename:split(Path),
+            {CurrentDocDirComponents1, PathComponents1} = drop_common_prefix(CurrentDocDirComponents0, PathComponents0),
+            string:join(
+              lists:duplicate(length(CurrentDocDirComponents1), "..") ++ PathComponents1,
+              "/")
+    end;
+make_relative_uri(Path) -> Path.
+
+-spec drop_common_prefix(List1::list(), List2::list()) -> {List1Rest::list(), List2Rest::list()}.
+drop_common_prefix([C | List1], [C | List2]) -> drop_common_prefix(List1, List2);
+drop_common_prefix(List1, List2)             -> {List1, List2}.
