@@ -1,5 +1,5 @@
 %%==============================================================================
-%% Copyright 2010 Erlang Solutions Ltd.
+%% Copyright 2014 Ulf Wiger
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 %% limitations under the License.
 %%==============================================================================
 %% @author Ulf Wiger <ulf@wiger.net>
-%% @copyright 2010 Erlang Solutions Ltd 
+%% @copyright 2014 Ulf Wiger
 %% @end
 %% =============================================================================
 %% Modified 2012 by Beads Land-Trujillo:  get_git_branch/0, redirect_href/3
@@ -52,7 +52,7 @@
 %% included in Packages!
 
 %% @spec (Command::doclet_gen() | doclet_toc(), edoc_context()) -> ok
-%% @doc Main doclet entry point. 
+%% @doc Main doclet entry point.
 %%
 %% Also see {@link //edoc/edoc:layout/2} for layout-related options, and
 %% {@link //edoc/edoc:get_doc/2} for options related to reading source
@@ -139,7 +139,7 @@ gen(Sources, App, Packages, Modules, FileMap, Ctxt) ->
 	 ++ lists:concat([modules_frame(Modules1) || Modules1 =/= []]),
 
     Text = xmerl:export_simple_content(Data, edown_xmerl),
-    write_file(Text, Dir, right_suffix(?INDEX_FILE, Options)),
+    write_file(Text, Dir, right_suffix(?INDEX_FILE, Options), '', ''),
     edoc_lib:write_info_file(App, Packages, Modules1, Dir),
     copy_stylesheet(Dir, Options),
     copy_image(Dir, Options),
@@ -168,25 +168,30 @@ make_top_level_README(Data, Options) ->
 	undefined ->
 	    ok;
 	{Path, BaseHRef} ->
-	    Dir = filename:dirname(Path),
-	    Filename = filename:basename(Path),
-	    make_top_level_README(Data, Dir, Filename, BaseHRef);
+            Dir = filename:dirname(Path),
+            Filename = filename:basename(Path),
+	    make_top_level_README(Data, Dir, Filename, BaseHRef,
+                                  get_git_branch(), target(Options));
 	{Path, BaseHRef, Branch} ->
-	    Dir = filename:dirname(Path),
-	    Filename = filename:basename(Path),
-	    make_top_level_README(Data, Dir, Filename, BaseHRef, Branch)
+            Dir = filename:dirname(Path),
+            Filename = filename:basename(Path),
+	    make_top_level_README(Data, Dir, Filename, BaseHRef, Branch,
+                                  target(Options))
     end.
 
-make_top_level_README(Data, Dir, F, BaseHRef) ->
-    Branch = get_git_branch(),
-    make_top_level_README(Data, Dir, F, BaseHRef, Branch).
+target(Options) ->
+    proplists:get_value(edown_target, Options, github).
 
-make_top_level_README(Data, Dir, F, BaseHRef, Branch) ->
+%% make_top_level_README(Data, Dir, F, BaseHRef) ->
+%%     Branch = get_git_branch(),
+%%     make_top_level_README(Data, Dir, F, BaseHRef, Branch).
+
+make_top_level_README(Data, Dir, F, BaseHRef, Branch, Target) ->
     Exp = [xmerl_lib:expand_element(D) || D <- Data],
     New = [xmerl_lib:mapxml(
 	     fun(#xmlElement{name = a,
 			     attributes = Attrs} = E) ->
-		     case redirect_href(Attrs, Branch, BaseHRef) of
+		     case redirect_href(Attrs, Branch, BaseHRef, Target) of
 			 {true, Attrs1} ->
 			     E#xmlElement{attributes = Attrs1};
 			 false ->
@@ -198,8 +203,8 @@ make_top_level_README(Data, Dir, F, BaseHRef, Branch) ->
     Text = xmerl:export_simple_content(New, edown_xmerl),
     write_file(Text, Dir, F).
 
-redirect_href(Attrs, Branch, BaseHRef) ->
-    AppBlob = BaseHRef ++ "/blob/" ++ Branch ++ "/",
+redirect_href(Attrs, Branch, BaseHRef, Target) ->
+    {Prefix, URIArgs} = href_redirect_parts(Target, BaseHRef, Branch),
     case lists:keyfind(href, #xmlAttribute.name, Attrs) of
 	false ->
 	    false;
@@ -210,12 +215,13 @@ redirect_href(Attrs, Branch, BaseHRef) ->
 		{match, _} ->
 		    false;
 		nomatch ->
-			case Href of 
-				[$# | _]	->
-					HRef1 = do_redirect(?INDEX_FILE ++ Href, AppBlob);
-				_Else ->
-					HRef1 = do_redirect(Href, AppBlob)
-			end,			
+                    case Href of
+                        [$# | _]	->
+                            HRef1 = do_redirect(?INDEX_FILE ++ Href,
+                                                Prefix, URIArgs);
+                        _Else ->
+                            HRef1 = do_redirect(Href, Prefix, URIArgs)
+                    end,
 		    {true,
 		     lists:keyreplace(
 		       href, #xmlAttribute.name, Attrs,
@@ -223,12 +229,18 @@ redirect_href(Attrs, Branch, BaseHRef) ->
 	    end
     end.
 
-do_redirect(Href, Prefix) ->
+href_redirect_parts(github, BaseHRef, Branch) ->
+    {BaseHRef ++ "/blob/" ++ Branch ++ "/", []};
+href_redirect_parts(stash, BaseHRef, Branch) ->
+    {BaseHRef ++ "/browse/", "?at=refs/heads/" ++ Branch}.
+
+
+do_redirect(Href, Prefix, Args) ->
     case filename:split(Href) of
 	[_] ->
-	    Prefix ++ "doc/" ++ Href;
+	    Prefix ++ "doc/" ++ Href ++ Args;
 	_ ->
-	    Prefix ++ Href
+	    Prefix ++ Href ++ Args
     end.
 
 get_git_branch() ->
@@ -286,6 +298,7 @@ sources(Sources, Dir, Modules, Env, Options) ->
 source({M, P, Name, Path}, Dir, Suffix, Env, Set, Private, Hidden,
        Error, Options) ->
     File = filename:join(Path, Name),
+    Enc = guess_encoding(File),
     case catch {ok, edoc:get_doc(File, Env, Options)} of
 	{ok, {Module, Doc}} ->
 	    check_name(Module, M, P, File),
@@ -294,7 +307,7 @@ source({M, P, Name, Path}, Dir, Suffix, Env, Set, Private, Hidden,
 		true ->
 		    Text = edoc:layout(Doc, Options),
 		    Name1 = packages_last(M) ++ Suffix,
-		    write_file(Text, Dir, Name1, P),
+		    write_file(Text, Dir, Name1, Name, P, Enc),
 		    {sets:add_element(Module, Set), Error};
 		false ->
 		    {Set, Error}
@@ -303,6 +316,40 @@ source({M, P, Name, Path}, Dir, Suffix, Env, Set, Private, Hidden,
 	    report("skipping source file '~s': ~W.", [File, R, 15]),
 	    {Set, true}
     end.
+
+guess_encoding(File) ->
+    try epp:read_encoding(File) of
+        none -> epp:default_encoding();
+        Enc  -> Enc
+    catch
+        _:_ ->
+            epp:default_encoding()
+    end.
+
+write_file(Text, Dir, F) ->
+    write_file(Text, Dir, F, F, '', auto).
+
+write_file(Text, Dir, Name, P) ->
+    write_file(Text, Dir, Name, Name, P, auto).
+
+write_file(Text, Dir, LastName, Name, P) ->
+    write_file(Text, Dir, LastName, Name, P, auto).
+
+write_file(Text, Dir, LastName, Name, P, Enc) ->
+    %% edoc_lib:write_file/5 (with encoding support) was added in OTP R16B
+    case lists:member({write_file,5}, edoc_lib:module_info(exports)) of
+        true ->
+            edoc_lib:write_file(Text, Dir, LastName, P,
+                                [{encoding, encoding(Enc, Name)}]);
+        false ->
+            edoc_lib:write_file(Text, Dir, LastName, P)
+    end.
+
+encoding(auto, Name) ->
+    edoc_lib:read_encoding(Name, []);
+encoding(Enc, _) ->
+    Enc.
+
 
 check_name(M, M0, P0, File) ->
     case erlang:function_exported(packages, strip_last, 1) of

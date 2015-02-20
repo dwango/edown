@@ -1,5 +1,5 @@
 %%==============================================================================
-%% Copyright 2010 Erlang Solutions Ltd.
+%% Copyright 2014 Ulf Wiger
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 %% limitations under the License.
 %%==============================================================================
 %% @author Ulf Wiger <ulf@wiger.net>
-%% @copyright 2010 Erlang Solutions Ltd
+%% @copyright 2014 Ulf Wiger
 %% @end
 %% =============================================================================
 %% Modified 2012 by Beads Land-Trujillo:  '#text#'/1, brstrip/1
@@ -46,14 +46,15 @@
     brstrip(to_string(Text)).
 
 to_string(S) ->
-    binary_to_list(iolist_to_binary([S])).
+    %%binary_to_list(iolist_to_binary([S])).
+    unicode:characters_to_list([S]).
 
 strip(Str) -> lstrip(rstrip(Str)).
-lstrip(Str) -> re:replace(Str,"^\\s","",[]).
-rstrip(Str) -> re:replace(Str, "\\s\$", []).
+lstrip(Str) -> re:replace(Str,"^\\s","", [unicode]).
+rstrip(Str) -> re:replace(Str, "\\s\$", "", [unicode]).
 
 % Strip double spaces at end of line -- markdown reads as hard return.
-brstrip(Str) -> re:replace(Str, "\\s+\\s\$", "", [global, multiline]).
+brstrip(Str) -> re:replace(Str, "\\s+\\s\$", "", [global, multiline, unicode]).
 
 %% The '#root#' tag is called when the entire structure has been
 %% exported. It does not appear in the structure itself.
@@ -91,6 +92,8 @@ brstrip(Str) -> re:replace(Str, "\\s+\\s\$", "", [global, multiline]).
 	#xmlElement{attributes = Attrs1, parents = Parents1} = E1 ->
 	    elem(a, Data, Attrs1, Parents1, E1)
     end;
+'#element#'(br, _, _, _, _) ->
+    ["<br />"];
 '#element#'(Tag, Data, Attrs, Parents, E) ->
     elem(Tag, Data, Attrs, Parents, E).
 
@@ -109,7 +112,7 @@ elem(Tag, Data, Attrs, Parents, E) ->
     end.
 
 escape_pre(Data) ->
-    re:replace(re:replace(Data, "<", "\\&lt;", [global]), ">", "\\&gt;", [global]).
+    re:replace(re:replace(Data, "<", "\\&lt;", [global, unicode]), ">", "\\&gt;", [global, unicode]).
 
 %% Given content of a pre tag in `Data', entity escape angle brackets
 %% but leave anchor tags alone. This is less than pretty, but is

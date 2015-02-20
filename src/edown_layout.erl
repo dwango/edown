@@ -1,5 +1,5 @@
 %%==============================================================================
-%% Copyright 2010 Erlang Solutions Ltd.
+%% Copyright 2014 Ulf Wiger
 %%
 %% Licensed under the Apache License, Version 2.0 (the "License");
 %% you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 %% limitations under the License.
 %%==============================================================================
 %% @author Ulf Wiger <ulf@wiger.net>
-%% @copyright 2010 Erlang Solutions Ltd
+%% @copyright 2014 Ulf Wiger
 %% @end
 %% =====================================================================
 
@@ -123,7 +123,7 @@ init_opts(Element, Options) ->
 	"" ->
 	    R;  % don't use any stylesheet
 	S when is_list(S) ->
-	    R#opts{stylesheet = S}; 
+	    R#opts{stylesheet = S};
 	_ ->
 	    report("bad value for option `stylesheet'.", []),
 	    exit(error)
@@ -222,8 +222,8 @@ layout_module(#xmlElement{name = module, content = Es}=E, Opts) ->
     Res = to_simple(markdown(Title, stylesheet(Opts), Body)),
     Res.
 
-%% This function is a workaround for a bug in xmerl_lib:expand_content/1 that 
-%% causes it to lose track of the parents if #xmlElement{} records are 
+%% This function is a workaround for a bug in xmerl_lib:expand_content/1 that
+%% causes it to lose track of the parents if #xmlElement{} records are
 %% encountered in the structure.
 %%
 to_simple([#xmlElement{name = Name, attributes = Attrs, content = Content}|T]) ->
@@ -263,7 +263,7 @@ to_simple_attrs(As) ->
     [{K,V} || #xmlAttribute{name = K, value = V} <- As].
 
 normalize_text(Text) ->
-    try normalize(binary_to_list(list_to_binary(Text)))
+    try normalize(Text)
     catch
 	error:_ ->
 	    lists:flatten(io_lib:fwrite("~p", [Text]))
@@ -281,7 +281,7 @@ normalize1([]) ->
     [].
 
 to_string(S) ->
-    binary_to_list(iolist_to_binary([S])).
+    unicode:characters_to_list([S]).
 
 module_params(Es) ->
     As = [{get_text(argName, Es1),
@@ -298,7 +298,7 @@ module_params(Es) ->
 %% 			     [edoc_lib:datestr(date()),
 %% 			      edoc_lib:timestr(time())])
 %% 	      ]}]}].
- 
+
 stylesheet(Opts) ->
     case Opts#opts.stylesheet of
 	undefined ->
@@ -479,7 +479,7 @@ label_anchor(Content, E) ->
 
 %% This is currently only done for functions without type spec.
 
-signature(Es, Name) -> 
+signature(Es, Name) ->
     [{tt, [Name, "("] ++ seq(fun arg/1, Es) ++ [") -> any()"]}].
 
 arg(#xmlElement{content = Es}) ->
@@ -605,7 +605,7 @@ pp_clause(Pre, Type) ->
     L1 = erl_pp:attribute({attribute,0,spec,{{list_to_atom(Atom),0},[Types]}}),
     "-spec " ++ L2 = lists:flatten(L1),
     L3 = Pre ++ lists:nthtail(length(Atom), L2),
-    re:replace(L3, "\n      ", "\n", [{return,list},global]).
+    re:replace(L3, "\n      ", "\n", [{return,list},global,unicode]).
 
 format_type(Prefix, Name, Type, Last, #opts{pretty_printer = erl_pp}=Opts) ->
     try
@@ -628,7 +628,7 @@ pp_type(Prefix, Type) ->
                  "::\n" ++ L3 -> {"\n"++L3,6}
              end,
     Ss = lists:duplicate(N, $\s),
-    re:replace(L2, "\n"++Ss, "\n", [{return,list},global]).
+    re:replace(L2, "\n"++Ss, "\n", [{return,list},global,unicode]).
 
 etypef(L, O0) ->
     {R, O} = etypef(L, [], O0, []),
@@ -894,6 +894,10 @@ t_type([#xmlElement{name = nonempty_list, content = Es}]) ->
     t_nonempty_list(Es);
 t_type([#xmlElement{name = tuple, content = Es}]) ->
     t_tuple(Es);
+t_type([#xmlElement{name = map, content = Es}]) ->
+    t_map(Es);
+t_type([#xmlElement{name = map_field, content=Es}]) ->
+    t_map_field(Es);
 t_type([#xmlElement{name = 'fun', content = Es}]) ->
     ["fun("] ++ t_fun(Es) ++ [")"];
 t_type([E = #xmlElement{name = record, content = Es}]) ->
@@ -1143,6 +1147,10 @@ ot_type([#xmlElement{name = nonempty_list, content = Es}]) ->
     ot_nonempty_list(Es);
 ot_type([#xmlElement{name = tuple, content = Es}]) ->
     ot_tuple(Es);
+ot_type([#xmlElement{name = map, content = Es}]) ->
+    ot_map(Es);
+ot_type([#xmlElement{name = map_field, content = Es}]) ->
+    ot_map_field(Es);
 ot_type([#xmlElement{name = 'fun', content = Es}]) ->
     ot_fun(Es);
 ot_type([#xmlElement{name = record, content = Es}]) ->
@@ -1199,10 +1207,23 @@ ot_nonempty_list(Es) ->
 ot_tuple(Es) ->
     {type,0,tuple,[ot_utype_elem(E) || E <- Es]}.
 
+ot_map(Es) ->
+    {type,0,map,[ot_utype_elem(E) || E <- Es]}.
+
+ot_map_field(Es) ->
+    {type,0,map_field_assoc,[ot_utype_elem(E) || E <- Es]}.
+
+
 ot_fun(Es) ->
     Range = ot_utype(get_elem(type, Es)),
     Args = [ot_utype_elem(A) || A <- get_content(argtypes, Es)],
     {type,0,'fun',[{type,0,product,Args},Range]}.
+
+t_map(Es) ->
+    ["#{"] ++ seq(fun t_utype_elem/1, Es, ["}"]).
+
+t_map_field([K,V]) ->
+    t_utype_elem(K) ++ [" => "] ++ t_utype_elem(V).
 
 ot_record(Es) ->
     {type,0,record,[ot_type(get_elem(atom, Es)) |
@@ -1253,7 +1274,7 @@ get_first_sentence(Es) ->
 
 get_first_sentence_1(Es) ->
     get_first_sentence_1(Es, []).
-    
+
 get_first_sentence_1([E = #xmlText{value = Txt} | Es], Acc) ->
     Last = case Es of
 	       [#xmlElement{name = p} | _] -> true;
