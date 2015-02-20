@@ -211,7 +211,7 @@ redirect_href(Attrs, Branch, BaseHRef, Target) ->
 	#xmlAttribute{value = "/" ++ _} ->
 	    false;
 	#xmlAttribute{value = Href} = A ->
-	    case re:run(Href, ":", []) of
+	    case re:run(Href, ":", [unicode]) of
 		{match, _} ->
 		    false;
 		nomatch ->
@@ -476,7 +476,7 @@ overview(Dir, Title, Env, Opts) ->
 		M:overview(Data, Opts)
 	end,
     _Markdown = edoc_lib:run_layout(F, Opts).
-    %% write_file(Text, Dir, ?OVERVIEW_SUMMARY).
+    %% edoc_lib:write_file(Text, Dir, ?OVERVIEW_SUMMARY).
 
 
 copy_image(Dir, Options) ->
@@ -599,22 +599,3 @@ toc(_Paths, _Ctxt) ->
     %% Dir = Ctxt#context.dir,
     %% Env = Ctxt#context.env,
     %% app_index_file(Paths, Dir, Env, Opts).
-
-%% @doc edoc_lib:write_file/5 を非ユニコード文字を含むマルチバイト文字列にも対応させたもの
-write_file(Text, Dir, Name)          -> write_file(Text, Dir, Name, '').
-write_file(Text, Dir, Name, Package) -> write_file(Text, Dir, Name, Package, [{encoding,latin1}]).
-write_file(Text, Dir, Name, Package, Options) ->
-    File = filename:join([Dir, to_list(Package), Name]),
-    ok = filelib:ensure_dir(File),
-    case file:open(File, [write] ++ Options) of
-        {ok, FD} ->
-            file:write(FD, Text),
-            ok = file:close(FD);
-        {error, R} ->
-            R1 = file:format_error(R),
-            report("could not write file '~ts': ~ts.", [File, R1]),
-            exit(error)
-    end.
-
-to_list(A) when is_atom(A) -> atom_to_list(A);
-to_list(S) when is_list(S) -> S.
