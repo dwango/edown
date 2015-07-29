@@ -4,9 +4,7 @@
 
 Copyright (c) 2014 Ulf Wiger
 
-
 __Authors:__ [`ulf@wiger.net`](mailto:ulf@wiger.net).
-
 
 Status:
 ------
@@ -63,6 +61,7 @@ The default value is `github`.
 Note that at the moment, the
 [Markdown viewer plugin](https://bitbucket.org/atlassianlabs/stash-markdown-viewer-plugin) will be needed in order to render the generated documentation
 as Markdown on Stash.
+
 Github customizations
 =====================
 `pre` tags are converted into github "fenced" code blocks, i.e.
@@ -129,7 +128,7 @@ output, since "raw" links wouldn't work for the markdown files.
 
 The next issue is that Edoc uses httpd_client to fetch the
 `edoc-info` files, which requires `inets` to be started. To
-further complicate matters, `ssl` (and thus `crypto` and
+further complicate matters, `ssl` (and thus `crypto`, 'asn1' and
 `public_key`) must also be started, since Github will
 redirect to https.
 
@@ -166,15 +165,4 @@ See [bin/MARKEDOC-README.md](bin/MARKEDOC-README.md).
 **FreeBSD, Mac OS X**`$ sed -E -f markedoc.sed <markdown file> > <edoc file>`
 
 **Linux**`$ sed -r -f markedoc.sed <markdown file> > <edoc file>`
-
-
-## Modules ##
-
-
-<table width="100%" border="0" summary="list of modules">
-<tr><td><a href="edown_doclet.md" class="module">edown_doclet</a></td></tr>
-<tr><td><a href="edown_layout.md" class="module">edown_layout</a></td></tr>
-<tr><td><a href="edown_lib.md" class="module">edown_lib</a></td></tr>
-<tr><td><a href="edown_make.md" class="module">edown_make</a></td></tr>
-<tr><td><a href="edown_xmerl.md" class="module">edown_xmerl</a></td></tr></table>
 
