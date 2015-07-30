@@ -266,7 +266,8 @@ no_nl(S) ->
 		       C =/= $\n], both).
 
 replace_edown_p(Data) ->
-    Data1 = binary_to_list(iolist_to_binary(Data)),
+    %%Data1 = binary_to_list(iolist_to_binary(Data)),
+    Data1 = unicode:characters_to_list([Data]),
     replace_edown_p(Data1, []).
 
 replace_edown_p("<edown_p>" ++ Data, Acc) ->
